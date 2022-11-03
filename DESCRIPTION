@@ -1,0 +1,38 @@
+Package: CCMMR
+Type: Package
+Title: Minimization of the Convex Clustering Loss Function
+Version: 0.1
+Date: 2022-09-26
+Authors@R: c(person(given = "Daniel", 
+                    family = "Touw", 
+                    role = c("aut", "cre"),
+                    email = "touw@ese.eur.nl",
+                    comment = c(ORCID = "0000-0003-3074-5401")),
+             person(given = "Patrick", 
+                    family = "Groenen", 
+                    role = "aut",
+                    email = "groenen@ese.eur.nl",
+                    comment = c(ORCID = "0000-0001-6683-8971")),
+             person(given = "Yoshikazu", 
+                    family = "Terada",
+                    role = "aut",
+                    email = "terada@sigmath.es.osaka-u.ac.jp"))
+Maintainer: Daniel Touw <touw@ese.eur.nl>
+Description: Implements the convex clustering through majorization-minimization 
+    (CCMM) algorithm to perform minimization of the convex clustering loss 
+    function.
+License: GPL (>= 3)
+RoxygenNote: 7.2.1
+URL: https://github.com/djwtouw/CCMMR/
+BugReports: https://github.com/djwtouw/CCMMR/issues/
+Imports: 
+    RANN (>= 2.6.1),
+    Rcpp (>= 1.0.7),
+    methods (>= 4.1.0),
+    graphics (>= 4.1.0),
+    r2r (>= 0.1.1),
+LinkingTo: Rcpp, RcppEigen
+NeedsCompilation: yes
+Depends: 
+    R (>= 4.1),
+    stats (>= 4.1)
