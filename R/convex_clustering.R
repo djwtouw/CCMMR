@@ -86,7 +86,7 @@
 #' X = data[, -3]
 #' y = data[, 3]
 #'
-#' # Get sparse distances in dictionary of keys format with k = 5 and phi = 8
+#' # Get sparse weights in dictionary of keys format with k = 5 and phi = 8
 #' W = sparse_weights(X, 5, 8.0)
 #'
 #' # Perform convex clustering with a target number of clusters
