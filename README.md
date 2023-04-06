@@ -4,9 +4,11 @@ CCMMR implements convex clustering using the minimization algorithm presented in
 There is also a [Python package](https://github.com/djwtouw/CCMMPy) available.
 
 ## Contents
-[Installation](#installation)
-
-[Examples](#examples)
+- [Installation](#installation)
+- [Examples](#examples)
+	* [Example 1: Computation of a clusterpath](#example-1-computation-of-a-clusterpath)
+	* [Example 2: Searching for a number of clusters](#example-2-searching-for-a-number-of-clusters)
+	* [Example 3: Alternative visualizations](#example-3-alternative-visualizations)
 
 ## Installation
 CCMMR has the following dependencies:
@@ -15,7 +17,11 @@ CCMMR has the following dependencies:
 - Rcpp
 - RcppEigen
 
-To install CCMMR, clone the repository, open `CCMMR.Rproj` in RStudio, and press install in the build panel.
+To install CCMMR, clone the repository, open `CCMMR.Rproj` in RStudio, and press install in the build panel. Another option is to use devtools to install the package from GitHub.
+```R
+library(devtools)
+install_github("djwtouw/CCMMR")
+```
 
 ## Examples
 The following examples are also part of the documentation of the package. Start with loading the package.
