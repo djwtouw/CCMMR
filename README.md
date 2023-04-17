@@ -1,6 +1,8 @@
 # CCMMR
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![CRAN_Status_Badge](https://www.r-pkg.org/badges/version/CCMMR)](https://cran.r-project.org/package=CCMMR)
+[![metacran downloads](https://cranlogs.r-pkg.org/badges/CCMMR)](https://cran.r-project.org/package=CCMMR)
 
 CCMMR implements convex clustering using the minimization algorithm presented in the paper _Convex Clustering through MM: An Efficient Algorithm to Perform Hierarchical Clustering_ by D.J.W. Touw, P.J.F. Groenen, and Y. Terada. For issues, please use [Github Issues](https://github.com/djwtouw/CCMMR/issues).
 
@@ -14,13 +16,19 @@ There is also a [Python package](https://github.com/djwtouw/CCMMPy) available.
 	* [Example 3: Alternative visualizations](#example-3-alternative-visualizations)
 
 ## Installation
+### From CRAN
+The package `CCMMR` is available on CRAN, hence the latest release can be installed using `R` via
+```R
+install.packages("CCMMR")
+```
+### Building from source
 CCMMR has the following dependencies:
 - r2r
 - RANN
 - Rcpp
 - RcppEigen
 
-To install CCMMR, clone the repository, open `CCMMR.Rproj` in RStudio, and press install in the build panel. Another option is to use devtools to install the package from GitHub.
+To install CCMMR, clone the repository, open `CCMMR.Rproj` in RStudio, and press install in the build panel. Another option is to use devtools to install the package from GitHub via
 ```R
 library(devtools)
 install_github("djwtouw/CCMMR")

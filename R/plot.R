@@ -9,6 +9,9 @@
 #' \code{NULL}.
 #' @param ... Further graphical parameters.
 #'
+#' @return
+#' A plot in the console.
+#'
 #' @examples
 #' # Load data
 #' data(two_half_moons)

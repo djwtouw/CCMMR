@@ -12,6 +12,9 @@ clusters(obj, n_clusters)
 \item{n_clusters}{An integer that specifies the number of clusters that
 should be returned.}
 }
+\value{
+A vector with the cluster labels for each object in the data.
+}
 \description{
 Get a particular clustering of the data. If there is a
 clustering for \code{n_clusters}, it is returned, otherwise the function will

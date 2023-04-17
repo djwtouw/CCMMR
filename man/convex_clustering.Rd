@@ -134,7 +134,7 @@ W = sparse_weights(X, 5, 8.0)
 res1 = convex_clustering(X, W, target_low = 2, target_high = 5)
 
 # Plot the clustering for 2 to 5 clusters
-par(mfrow=c(2, 2))
+oldpar = par(mfrow=c(2, 2))
 plot(X, col = clusters(res1, 2), main = "2 clusters", pch = 19)
 plot(X, col = clusters(res1, 3), main = "3 clusters", pch = 19)
 plot(X, col = clusters(res1, 4), main = "4 clusters", pch = 19)
@@ -153,6 +153,7 @@ for (i in 1:k) {
 
     plot(X, col = labels, main = paste(c, "clusters"), pch = 19)
 }
+par(oldpar)
 
 }
 \seealso{

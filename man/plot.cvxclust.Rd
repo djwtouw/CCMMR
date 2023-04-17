@@ -17,6 +17,9 @@
 
 \item{...}{Further graphical parameters.}
 }
+\value{
+A plot in the console.
+}
 \description{
 Plot a clusterpath for two-dimensional data.
 }

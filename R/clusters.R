@@ -10,6 +10,8 @@
 #' @param n_clusters An integer that specifies the number of clusters that
 #' should be returned.
 #'
+#' @return A vector with the cluster labels for each object in the data.
+#'
 #' @examples
 #' # Load data
 #' data(two_half_moons)

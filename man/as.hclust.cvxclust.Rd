@@ -43,10 +43,11 @@ hcl = as.hclust(res)
 hcl$height = sqrt(hcl$height)
 
 # Plot clusterpath and dendrogram
-par(mfrow=c(1, 2))
+oldpar = par(mfrow=c(1, 2))
 plot(res, y, label = c(1:7))
 plot(hcl, ylab = expression(sqrt(lambda)), xlab = NA, sub = NA, main = NA,
      hang = -1)
+par(oldpar)
 
 }
 \seealso{
