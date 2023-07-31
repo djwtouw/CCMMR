@@ -4,7 +4,14 @@
 \alias{sparse_weights}
 \title{Computation of sparse weight matrix}
 \usage{
-sparse_weights(X, k, phi, connected = TRUE, scale = TRUE)
+sparse_weights(
+  X,
+  k,
+  phi,
+  connected = TRUE,
+  scale = TRUE,
+  connection_type = "SC"
+)
 }
 \arguments{
 \item{X}{An \eqn{n} x \eqn{p} numeric matrix. This function assumes that each
@@ -16,13 +23,23 @@ row represents an object with \eqn{p} attributes.}
 nonnegative value.}
 
 \item{connected}{If \code{TRUE}, guarantee a connected structure of the
-weight matrix by using a symmetric circulant matrix to add nonzero weights.
-This ensures that groups of observations that would not be connected through
-weights that are based only on the k nearest neighbors are (indirectly)
-connected anyway. Default is \code{TRUE}.}
+weight matrix. This ensures that groups of observations that would not be
+connected through weights that are based only on the \code{k} nearest
+neighbors are (indirectly) connected anyway. The method is determined by
+the argument \code{connection_type}. Default is \code{TRUE}.}
 
 \item{scale}{If \code{TRUE}, scale each squared l2-norm by the mean squared
 l2-norm to ensure scale invariance of the weights. Default is \code{TRUE}.}
+
+\item{connection_type}{Determines the method to ensure a connected weight
+matrix if \code{connected} is \code{TRUE}. Should be one of
+\code{c("SC", "MST")}. SC stands for the method using a symmetric circulant
+matrix, connecting objects \eqn{i} with objects \eqn{i + 1} (and \eqn{n} with
+\eqn{1}). MST stands for minimum spanning tree. The graph that results from
+the nonzero weights determined by the \eqn{k} nearest neighbors is divided
+into \eqn{c} subgraphs and a minimum spanning tree algorithm is used to add
+\eqn{c-1} nonzero weights to ensure that all objects are indirectly
+connected. Default is \code{"SC"}.}
 }
 \value{
 A \code{sparseweights} object containing the nonzero weights in
@@ -32,7 +49,9 @@ dictionary-of-keys format.
 Construct a sparse weight matrix in a dictionary-of-keys format.
 Each nonzero weight is computed as \eqn{exp(-phi * ||x_i - x_j||^2)}, where
 the squared Euclidean distance may be scaled by the average squared Euclidean
-distance, depending on the argument \code{scale}.
+distance, depending on the argument \code{scale}. Sparsity is achieved by
+only setting weights to nonzero values that correspond to two objects that
+are among each other's \eqn{k} nearest neighbors.
 }
 \examples{
 # Load data
