@@ -14,7 +14,8 @@ convex_clusterpath(
   eps_conv = 1e-06,
   burnin_iter = 25,
   max_iter_conv = 5000,
-  save_clusterpath = TRUE
+  save_clusterpath = TRUE,
+  target_losses = NULL
 )
 }
 \arguments{
@@ -50,6 +51,19 @@ the loss function for each lambda. Is required for drawing the clusterpath.
 Default is \code{FALSE}. To store the clusterpath coordinates, \eqn{n} x
 \eqn{p} x \eqn{no. lambdas} have to be stored, this may require too much
 memory for large data sets.}
+
+\item{target_losses}{The values of the loss function that are used to
+determine convergence of the algorithm (tested as: loss - target <=
+\code{eps_conv} * target). If the input is not \code{NULL}, it should be a
+vector with the same length as \code{lambdas}. Great care should be exercised
+to make sure that the target losses correspond to attainable values for the
+minimization. The inputs (\code{X}, \code{W}, \code{lambdas}) should be the
+same, but also the same version of the loss function (centered, scaled)
+should be used. Default is \code{NULL}.}
+
+\item{use_target}{If \code{TRUE}, the input argument \code{target_losses} is
+used to determine convergence of the minimization algorithm. This can be used
+to compare different minimization algorithms. Default is \code{FALSE}.}
 }
 \value{
 A \code{cvxclust} object containing the following

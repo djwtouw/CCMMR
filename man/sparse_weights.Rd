@@ -34,7 +34,7 @@ l2-norm to ensure scale invariance of the weights. Default is \code{TRUE}.}
 \item{connection_type}{Determines the method to ensure a connected weight
 matrix if \code{connected} is \code{TRUE}. Should be one of
 \code{c("SC", "MST")}. SC stands for the method using a symmetric circulant
-matrix, connecting objects \eqn{i} with objects \eqn{i + 1} (and \eqn{n} with
+matrix, connecting objects \eqn{i} with objects \eqn{i+1} (and \eqn{n} with
 \eqn{1}). MST stands for minimum spanning tree. The graph that results from
 the nonzero weights determined by the \eqn{k} nearest neighbors is divided
 into \eqn{c} subgraphs and a minimum spanning tree algorithm is used to add
