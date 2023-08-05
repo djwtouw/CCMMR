@@ -34,7 +34,9 @@ sparse_from_dok(const Eigen::Matrix<int, 2, Eigen::Dynamic>& M_idx,
 
     // Insert the elements
     for (int i = 0; i < nnz; i++) {
-        result.insert(M_idx(0, i), M_idx(1, i)) = M_val(i);
+        if (M_idx(0, i) > M_idx(1, i)) {
+            result.insert(M_idx(0, i), M_idx(1, i)) = M_val(i);
+        }
     }
 
     // Compress
@@ -78,6 +80,7 @@ struct CCMMVariables {
     Eigen::MatrixXd XU;
     Eigen::SparseMatrix<double> U;
     Eigen::SparseMatrix<double> UWU;
+    Eigen::SparseMatrix<double> D;
     Eigen::ArrayXd cluster_sizes;
 
     // Variables to construct the merge table
@@ -116,6 +119,30 @@ struct CCMMVariables {
     }
 
 
+    void update_distances()
+    {
+        // Compute the pairwise distances
+        for (int j = 0; j < D.outerSize(); j++) {
+            for (Eigen::SparseMatrix<double>::InnerIterator it(D, j); it; ++it) {
+                int i = int(it.row());
+                if (i == j) continue;
+
+                it.valueRef() = (M.col(i) - M.col(j)).norm();
+            }
+        }
+    }
+
+
+    void set_distances()
+    {
+        // Copy UWU to get the same sparsity structure
+        D = UWU;
+
+        // Compute the pairwise distances
+        update_distances();
+    }
+
+
     double loss_fusions(const CCMMConstants& constants, double lambda) const
     {
         // TODO: Profile later with and without .noalias()
@@ -130,12 +157,18 @@ struct CCMMVariables {
 
         // Compute the penalty term
         for (int j = 0; j < UWU.outerSize(); j++) {
+            // Iterator for D
+            Eigen::SparseMatrix<double>::InnerIterator D_it(D, j);
+
             for (Eigen::SparseMatrix<double>::InnerIterator it(UWU, j); it; ++it) {
                 int i = int(it.row());
 
-                if (i < j) {
-                    penalty += it.value() * (M.col(i) - M.col(j)).norm();
+                if (i > j) {
+                    penalty += it.value() * D_it.value();
                 }
+
+                // Continue iterator for D
+                ++D_it;
             }
         }
 
@@ -165,6 +198,9 @@ struct CCMMVariables {
         // gamma * abs(C) * M0 as D0 is twice the diagonal of C and all
         // off-diagonal elements of C are negative
         for (int j = 0; j < UWU.outerSize(); j++) {
+            // Iterator for D
+            Eigen::SparseMatrix<double>::InnerIterator D_it(D, j);
+
             for (Eigen::SparseMatrix<double>::InnerIterator it(UWU, j); it; ++it) {
                 int i = int(it.row());
 
@@ -172,7 +208,7 @@ struct CCMMVariables {
                     double w_ij = it.value();
 
                     // Compute gamma * UWU_ij / ||m_i - m_j||
-                    double temp1 = (M.col(i) - M.col(j)).norm();
+                    double temp1 = D_it.value();
                     temp1 = gamma * w_ij / std::max(temp1, 1e-6);
 
                     for (int row = 0; row < p; row++) {
@@ -185,6 +221,9 @@ struct CCMMVariables {
                     diagonal(i) += temp1;
                     diagonal(j) += temp1;
                 }
+
+                // Continue iterator for D
+                ++D_it;
             }
         }
 
@@ -205,6 +244,9 @@ struct CCMMVariables {
 
         // Set new M
         M = M_update;
+
+        // Update pairwise distances
+        update_distances();
     }
 
 
@@ -213,9 +255,7 @@ struct CCMMVariables {
         // Preliminaries
         int n = int(M.cols());
         int cluster = 1;
-        double eps_fus_sq = eps_fusions * eps_fusions;
         Eigen::ArrayXi cluster_membership = Eigen::ArrayXi::Zero(n);
-        // Eigen::ArrayXd distances = 2 * eps_fus_sq * Eigen::ArrayXd::Ones(n);
 
         // Find fusion candidates
         for (int j = 0; j < UWU.outerSize(); j++) {
@@ -223,30 +263,20 @@ struct CCMMVariables {
                 cluster_membership(j) = cluster;
                 cluster++;
 
+                // Iterator for D
+                Eigen::SparseMatrix<double>::InnerIterator D_it(D, j);
+
                 for (Eigen::SparseMatrix<double>::InnerIterator it(UWU, j); it; ++it) {
                     int i = int(it.row());
 
-                    /* Alternative way of finding fusion candidates, allows
-                     * "stealing" of a row of M if a later evaluated distance
-                     * is found to be smaller. Positive effect appears to be
-                     * negligible, requires further testing
-                     if (j != i) {
-                     double d_ij = (M.col(i) - M.col(j)).squaredNorm();
-
-                     if ((d_ij <= eps_fus_sq) && (d_ij < distances(i))) {
-                     cluster_membership(i) = cluster_membership(j);
-                     distances(i) = d_ij;
-                     }
-                     }*/
-
-                    // Same approach as CCMMR
                     if (i > j) {
-                        double d_ij = (M.col(i) - M.col(j)).squaredNorm();
-
-                        if (d_ij <= eps_fus_sq) {
+                        if (D_it.value() <= eps_fusions) {
                             cluster_membership(i) = cluster_membership(j);
                         }
                     }
+
+                    // Continue iterator for D
+                    ++D_it;
                 }
             }
         }
@@ -272,8 +302,13 @@ struct CCMMVariables {
         auto U_new = fusion_candidates(eps_fusions);
 
         if (U_new.rows() > U_new.cols()) {
-            // Simple updates of variables
+            // Computation of updated lower triangular part of UWU
             UWU = U_new.transpose() * UWU * U_new;
+            Eigen::SparseMatrix<double> lt = UWU.triangularView<Eigen::Lower>();
+            Eigen::SparseMatrix<double> utt = UWU.triangularView<Eigen::Upper>().transpose();
+            UWU = lt + utt;
+
+            // Update of XU
             XU = XU * U_new;
 
             // New cluster sizes and new M
@@ -360,6 +395,9 @@ struct CCMMVariables {
             // Set M and cluster_sizes to their updates
             M = M_new;
             cluster_sizes = cluster_sizes_new;
+
+            // Set distances based on the new clusters
+            set_distances();
         }
 
         return U_new.rows() > U_new.cols();
@@ -380,6 +418,10 @@ struct CCMMVariables {
     void minimize(const CCMMConstants& constants, double lambda,
                   double loss_target)
     {
+        // Compute the relevant distances based on the nonzero elements of the
+        // weight matrix
+        set_distances();
+
         // Preliminaries
         int iter = 0;
         double loss_1 = loss_fusions(constants, lambda);
