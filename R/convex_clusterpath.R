@@ -26,9 +26,6 @@
 #' Default is \code{FALSE}. To store the clusterpath coordinates, \eqn{n} x
 #' \eqn{p} x \eqn{no. lambdas} have to be stored, this may require too much
 #' memory for large data sets.
-#' @param use_target If \code{TRUE}, the input argument \code{target_losses} is
-#' used to determine convergence of the minimization algorithm. This can be used
-#' to compare different minimization algorithms. Default is \code{FALSE}.
 #' @param target_losses The values of the loss function that are used to
 #' determine convergence of the algorithm (tested as: loss - target <=
 #' \code{eps_conv} * target). If the input is not \code{NULL}, it should be a
