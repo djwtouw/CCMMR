@@ -86,7 +86,7 @@
 convex_clusterpath <- function(X, W, lambdas, tau = 1e-3, center = TRUE,
                                scale = TRUE, eps_conv = 1e-6, burnin_iter = 25,
                                max_iter_conv = 5000, save_clusterpath = TRUE,
-                               target_losses = NULL)
+                               target_losses = NULL, save_losses = FALSE)
 {
     # Input checks
     .check_array(X, 2, "X")
@@ -99,6 +99,7 @@ convex_clusterpath <- function(X, W, lambdas, tau = 1e-3, center = TRUE,
     .check_int(burnin_iter, FALSE, "burnin_iter")
     .check_int(max_iter_conv, FALSE, "max_iter_conv")
     .check_boolean(save_clusterpath, "save_clusterpath")
+    .check_boolean(save_losses, "save_losses")
 
     # Check the vector of target losses
     if (!is.null(target_losses)) {
@@ -139,7 +140,8 @@ convex_clusterpath <- function(X, W, lambdas, tau = 1e-3, center = TRUE,
     t_start = Sys.time()
     clust = .convex_clusterpath(X_, W_idx, W_val, lambdas, target_losses,
                                 eps_conv, eps_fusions, scale, save_clusterpath,
-                                use_target, burnin_iter, max_iter_conv)
+                                use_target, save_losses, burnin_iter,
+                                max_iter_conv)
     elapsed_time = difftime(Sys.time(), t_start, units = "secs")
 
     # Construct result
@@ -202,6 +204,11 @@ convex_clusterpath <- function(X, W, lambdas, tau = 1e-3, center = TRUE,
 
     # Give the result a class
     class(result) = "cvxclust"
+
+    # Add losses
+    if (save_losses) {
+        result$losses = clust$losses
+    }
 
     return(result)
 }

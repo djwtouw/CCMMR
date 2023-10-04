@@ -3,6 +3,7 @@
 #include <Eigen/Eigen>
 #include <iostream>
 #include <algorithm>
+#include <list>
 
 //[[Rcpp::depends(RcppEigen)]]
 
@@ -419,13 +420,17 @@ struct CCMMVariables {
     }
 
 
-    void minimize(const CCMMConstants& constants, double lambda,
-                  double loss_target)
+    Eigen::VectorXd minimize(const CCMMConstants& constants, double lambda,
+                             double loss_target)
     {
         // Preliminaries
         int iter = 0;
         double loss_1 = loss_fusions(constants, lambda);
         double loss_0 = (2 + constants.eps_conv) * loss_1;
+
+        // Track loss value during iterations
+        Eigen::VectorXd losses(constants.max_iter + 1);
+        losses(0) = loss_1;
 
         while (!has_converged(loss_0, loss_1, loss_target,
                               constants.eps_conv, constants.use_target) &&
@@ -457,11 +462,19 @@ struct CCMMVariables {
             Rcpp::checkUserInterrupt();
 
             iter++;
+
+            // Add loss to the vector keeping track of the loss values
+            losses(iter) = loss_1;
         }
 
         // Minimization result
         n_iterations = iter;
         loss = loss_1;
+
+        // Resize the losses vector
+        losses.conservativeResize(iter + 1);
+
+        return losses;
     }
 
 
@@ -541,6 +554,20 @@ struct CCMMResults {
 };
 
 
+Rcpp::List stdListToRcppList(const std::list<Eigen::VectorXd>& l)
+{
+    Rcpp::List result(l.size());
+
+    // Fill the list
+    int i = 0;
+    for (const Eigen::VectorXd& vec : l) {
+        result[i++] = Eigen::VectorXd(vec);
+    }
+
+    return result;
+}
+
+
 //[[Rcpp::export(.convex_clusterpath)]]
 Rcpp::List
 convex_clusterpath(const Eigen::MatrixXd& X,
@@ -553,6 +580,7 @@ convex_clusterpath(const Eigen::MatrixXd& X,
                    bool scale,
                    bool save_clusterpath,
                    bool use_target,
+                   bool save_losses,
                    int burnin_iter,
                    int max_iter_conv)
 {
@@ -573,10 +601,20 @@ convex_clusterpath(const Eigen::MatrixXd& X,
                             max_iter_conv, scale, use_target);
     CCMMResults results(n_obs, n_vars, n_lambdas, save_clusterpath);
 
+    // Linked list for storing the losses for each minimization
+    std::list<Eigen::VectorXd> losses;
+
     // Minimize the convex clustering loss function for each lambda
     for (int i = 0; i < n_lambdas; i++) {
-        variables.minimize(constants, lambdas(i), target_losses(i));
+        Eigen::VectorXd losses_i = variables.minimize(
+            constants, lambdas(i), target_losses(i)
+        );
         results.add_results(variables, lambdas(i));
+
+        // Add losses for this minimization to the list
+        if (save_losses) {
+            losses.push_back(losses_i);
+        }
     }
 
     // Do some cleaning up on the variables
@@ -590,6 +628,10 @@ convex_clusterpath(const Eigen::MatrixXd& X,
         Rcpp::Named("info_i") = results.info_i,
         Rcpp::Named("info_d") = results.info_d
     );
+
+    if (save_losses) {
+        res["losses"] = stdListToRcppList(losses);
+    }
 
     return res;
 }
@@ -644,7 +686,7 @@ convex_clustering(const Eigen::MatrixXd& X,
     int current_target = std::min(n_obs - 1, target_high);
 
     // Minimize loss for lambda = 0
-    variables.minimize(constants, 0, -1.0);
+    static_cast<void>(variables.minimize(constants, 0, -1.0));
 
     // Create variables struct to store the result if the target has been
     // found
@@ -695,7 +737,7 @@ convex_clustering(const Eigen::MatrixXd& X,
 
         while (iter < max_iter_phase_1 && lambda < 1e30) {
             // Minimize the loss
-            variables.minimize(constants, lambda, -1.0);
+            static_cast<void>(variables.minimize(constants, lambda, -1.0));
             phase_1_instances_solved++;
 
             if (verbose > 0) {
@@ -750,7 +792,7 @@ convex_clustering(const Eigen::MatrixXd& X,
                 lambda = 0.5 * (lambda_lb + lambda_ub);
 
                 // Minimize the loss
-                variables.minimize(constants, lambda, -1.0);
+                static_cast<void>(variables.minimize(constants, lambda, -1.0));
                 phase_2_instances_solved++;
 
                 if (verbose > 0) {
