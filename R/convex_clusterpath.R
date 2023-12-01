@@ -34,6 +34,14 @@
 #' minimization. The inputs (\code{X}, \code{W}, \code{lambdas}) should be the
 #' same, but also the same version of the loss function (centered, scaled)
 #' should be used. Default is \code{NULL}.
+#' @param save_losses If \code{TRUE}, return the values of the loss function
+#' attained during minimization for each value of lambda. Default is
+#' \code{FALSE}.
+#' @param save_convergence_norms If \code{TRUE}, return the norm of the
+#' difference between consecutive iterates during minimization for each value
+#' of lambda. Default is \code{FALSE}. If timing the algorithm is of importance,
+#' do not set this to \code{TRUE}, as additional computations are done for
+#' bookkeeping that are irrelevant to the optimization.
 #'
 #' @return A \code{cvxclust} object containing the following
 #' \item{\code{info}}{A dataframe containing for each value for lambda: the
@@ -57,6 +65,11 @@
 #' \item{\code{num_clusters}}{The different numbers of clusters that have been
 #' found.}
 #' \item{\code{n}}{The number of observations in \code{X}.}
+#' \item{\code{losses}}{Optional: if \code{save_losses = TRUE}, the values of
+#' the loss function during minimization.}
+#' \item{\code{convergence_norms}}{Optional: if
+#' \code{save_convergence_norms = TRUE}, the norms of the differences between
+#' consecutive iterates during minimization.}
 #'
 #' @examples
 #' # Load data
@@ -86,7 +99,8 @@
 convex_clusterpath <- function(X, W, lambdas, tau = 1e-3, center = TRUE,
                                scale = TRUE, eps_conv = 1e-6, burnin_iter = 25,
                                max_iter_conv = 5000, save_clusterpath = TRUE,
-                               target_losses = NULL, save_losses = FALSE)
+                               target_losses = NULL, save_losses = FALSE,
+                               save_convergence_norms = FALSE)
 {
     # Input checks
     .check_array(X, 2, "X")
@@ -100,6 +114,7 @@ convex_clusterpath <- function(X, W, lambdas, tau = 1e-3, center = TRUE,
     .check_int(max_iter_conv, FALSE, "max_iter_conv")
     .check_boolean(save_clusterpath, "save_clusterpath")
     .check_boolean(save_losses, "save_losses")
+    .check_boolean(save_convergence_norms, "save_convergence_norms")
 
     # Check the vector of target losses
     if (!is.null(target_losses)) {
@@ -140,7 +155,8 @@ convex_clusterpath <- function(X, W, lambdas, tau = 1e-3, center = TRUE,
     t_start = Sys.time()
     clust = .convex_clusterpath(X_, W_idx, W_val, lambdas, target_losses,
                                 eps_conv, eps_fusions, scale, save_clusterpath,
-                                use_target, save_losses, burnin_iter,
+                                use_target, save_losses,
+                                save_convergence_norms, burnin_iter,
                                 max_iter_conv)
     elapsed_time = difftime(Sys.time(), t_start, units = "secs")
 
@@ -208,6 +224,11 @@ convex_clusterpath <- function(X, W, lambdas, tau = 1e-3, center = TRUE,
     # Add losses
     if (save_losses) {
         result$losses = clust$losses
+    }
+
+    # Add convergence norms
+    if (save_convergence_norms) {
+        result$convergence_norms = clust$convergence_norms
     }
 
     return(result)

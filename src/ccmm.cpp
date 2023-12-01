@@ -420,8 +420,9 @@ struct CCMMVariables {
     }
 
 
-    Eigen::VectorXd minimize(const CCMMConstants& constants, double lambda,
-                             double loss_target)
+    std::tuple<Eigen::VectorXd, Eigen::VectorXd>
+    minimize(const CCMMConstants& constants, double lambda, double loss_target,
+             bool save_convergence_norms)
     {
         // Preliminaries
         int iter = 0;
@@ -431,6 +432,20 @@ struct CCMMVariables {
         // Track loss value during iterations
         Eigen::VectorXd losses(constants.max_iter + 1);
         losses(0) = loss_1;
+
+        // Track difference between iterates
+        Eigen::VectorXd delta_iterates;
+        Eigen::MatrixXd A0;
+        Eigen::MatrixXd A1;
+
+        // Only compute A0 and allocate resources if the differences are tracked
+        if (save_convergence_norms) {
+            // Ensure that delta_iterates is properly sized
+            delta_iterates.resize(constants.max_iter);
+
+            // Compute A0
+            A0 = M * U.transpose();
+        }
 
         while (!has_converged(loss_0, loss_1, loss_target,
                               constants.eps_conv, constants.use_target) &&
@@ -465,6 +480,19 @@ struct CCMMVariables {
 
             // Add loss to the vector keeping track of the loss values
             losses(iter) = loss_1;
+
+            // If tracking, compute the norm of the difference between the
+            // iterates of A
+            if (save_convergence_norms) {
+                // Compute updated version of A
+                A1 = M * U.transpose();
+
+                // Compute the difference between A0 and A1
+                delta_iterates(iter - 1) = (A0 - A1).norm();
+
+                // Update A0
+                A0 = A1;
+            }
         }
 
         // Minimization result
@@ -474,7 +502,12 @@ struct CCMMVariables {
         // Resize the losses vector
         losses.conservativeResize(iter + 1);
 
-        return losses;
+        // Resize the iterate differences vector
+        if (save_convergence_norms) {
+            delta_iterates.conservativeResize(iter);
+        }
+
+        return std::make_tuple(losses, delta_iterates);
     }
 
 
@@ -581,6 +614,7 @@ convex_clusterpath(const Eigen::MatrixXd& X,
                    bool save_clusterpath,
                    bool use_target,
                    bool save_losses,
+                   bool save_convergence_norms,
                    int burnin_iter,
                    int max_iter_conv)
 {
@@ -604,16 +638,25 @@ convex_clusterpath(const Eigen::MatrixXd& X,
     // Linked list for storing the losses for each minimization
     std::list<Eigen::VectorXd> losses;
 
+    // Linked list for storing the differences between the iterates for each
+    // minimization
+    std::list<Eigen::VectorXd> convergence_norms;
+
     // Minimize the convex clustering loss function for each lambda
     for (int i = 0; i < n_lambdas; i++) {
-        Eigen::VectorXd losses_i = variables.minimize(
-            constants, lambdas(i), target_losses(i)
+        auto [losses_i, convergence_norms_i] = variables.minimize(
+            constants, lambdas(i), target_losses(i), save_convergence_norms
         );
         results.add_results(variables, lambdas(i));
 
         // Add losses for this minimization to the list
         if (save_losses) {
             losses.push_back(losses_i);
+        }
+
+        // Add the differences between the iterates to the list
+        if (save_convergence_norms) {
+            convergence_norms.push_back(convergence_norms_i);
         }
     }
 
@@ -631,6 +674,10 @@ convex_clusterpath(const Eigen::MatrixXd& X,
 
     if (save_losses) {
         res["losses"] = stdListToRcppList(losses);
+    }
+
+    if (save_convergence_norms) {
+        res["convergence_norms"] = stdListToRcppList(convergence_norms);
     }
 
     return res;
@@ -686,7 +733,7 @@ convex_clustering(const Eigen::MatrixXd& X,
     int current_target = std::min(n_obs - 1, target_high);
 
     // Minimize loss for lambda = 0
-    static_cast<void>(variables.minimize(constants, 0, -1.0));
+    static_cast<void>(variables.minimize(constants, 0, -1.0, false));
 
     // Create variables struct to store the result if the target has been
     // found
@@ -737,7 +784,7 @@ convex_clustering(const Eigen::MatrixXd& X,
 
         while (iter < max_iter_phase_1 && lambda < 1e30) {
             // Minimize the loss
-            static_cast<void>(variables.minimize(constants, lambda, -1.0));
+            static_cast<void>(variables.minimize(constants, lambda, -1.0, false));
             phase_1_instances_solved++;
 
             if (verbose > 0) {
@@ -792,7 +839,7 @@ convex_clustering(const Eigen::MatrixXd& X,
                 lambda = 0.5 * (lambda_lb + lambda_ub);
 
                 // Minimize the loss
-                static_cast<void>(variables.minimize(constants, lambda, -1.0));
+                static_cast<void>(variables.minimize(constants, lambda, -1.0, false));
                 phase_2_instances_solved++;
 
                 if (verbose > 0) {

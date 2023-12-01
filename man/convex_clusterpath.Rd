@@ -15,7 +15,9 @@ convex_clusterpath(
   burnin_iter = 25,
   max_iter_conv = 5000,
   save_clusterpath = TRUE,
-  target_losses = NULL
+  target_losses = NULL,
+  save_losses = FALSE,
+  save_convergence_norms = FALSE
 )
 }
 \arguments{
@@ -60,6 +62,14 @@ to make sure that the target losses correspond to attainable values for the
 minimization. The inputs (\code{X}, \code{W}, \code{lambdas}) should be the
 same, but also the same version of the loss function (centered, scaled)
 should be used. Default is \code{NULL}.}
+
+\item{save_losses}{If \code{TRUE}, return the values of the loss function
+attained during minimization for each value of lambda. Default is
+\code{FALSE}.}
+
+\item{save_convergence_norms}{If \code{TRUE}, return the norm of the
+difference between consecutive iterates during minimization for each value
+of lambda. Default is \code{FALSE}.}
 }
 \value{
 A \code{cvxclust} object containing the following
@@ -84,6 +94,11 @@ the algorithm.}
 \item{\code{num_clusters}}{The different numbers of clusters that have been
 found.}
 \item{\code{n}}{The number of observations in \code{X}.}
+\item{\code{losses}}{Optional: if \code{save_losses = TRUE}, the values of
+the loss function during minimization.}
+\item{\code{convergence_norms}}{Optional: if
+\code{save_convergence_norms = TRUE}, the norms of the differences between
+consecutive iterates during minimization.}
 }
 \description{
 Minimizes the convex clustering loss function for a given set of
