@@ -47,11 +47,11 @@ sparse_weights <- function(X, k, phi, connected = TRUE, scale = TRUE,
                            connection_type = "SC")
 {
     # Input checks
-    CCMMR:::.check_array(X, 2, "X")
-    CCMMR:::.check_int(k, TRUE, "k")
-    CCMMR:::.check_scalar(phi, FALSE, "phi")
-    CCMMR:::.check_boolean(connected, "connected")
-    CCMMR:::.check_boolean(scale, "scale")
+    .check_array(X, 2, "X")
+    .check_int(k, TRUE, "k")
+    .check_scalar(phi, FALSE, "phi")
+    .check_boolean(connected, "connected")
+    .check_boolean(scale, "scale")
     if (!(connection_type %in% c("SC", "MST"))) {
         message = "Expected one of 'SC' and 'MST' for connection_type"
         stop(message)
@@ -66,8 +66,8 @@ sparse_weights <- function(X, k, phi, connected = TRUE, scale = TRUE,
     nn_dists = nn_res$nn.dists
 
     # Transform the indices of the k-nn into a dictionary of keys sparse matrix
-    res = CCMMR:::.sparse_weights(t(X), t(nn_idx), t(nn_dists), phi, k,
-                                  (connection_type == "SC") && connected, scale)
+    res = .sparse_weights(t(X), t(nn_idx), t(nn_dists), phi, k,
+                          (connection_type == "SC") && connected, scale)
 
     # Unique keys and value pairs
     keys = t(res$keys)
@@ -79,7 +79,7 @@ sparse_weights <- function(X, k, phi, connected = TRUE, scale = TRUE,
 
     if (connection_type == "MST" && connected) {
         # Use the keys of the sparse weight matrix to find clusters in the data
-        id = CCMMR:::.find_subgraphs(t(keys), nrow(X)) + 1
+        id = .find_subgraphs(t(keys), nrow(X)) + 1
 
         # Number of disconnected parts of the graph
         n_clusters = max(id)
@@ -118,7 +118,7 @@ sparse_weights <- function(X, k, phi, connected = TRUE, scale = TRUE,
             }
 
             # Find minimum spanning tree for D_between
-            mst_keys = CCMMR:::.find_mst(D_between) + 1
+            mst_keys = .find_mst(D_between) + 1
 
             # Vector for the weights
             mst_values = rep(0, nrow(mst_keys))
