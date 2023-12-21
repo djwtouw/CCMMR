@@ -1,8 +1,8 @@
 Package: CCMMR
 Type: Package
 Title: Minimization of the Convex Clustering Loss Function
-Version: 0.1
-Date: 2023-04-13
+Version: 0.2
+Date: 2023-12-21
 Authors@R: c(person(given = "Daniel", 
                     family = "Touw", 
                     role = c("aut", "cre"),

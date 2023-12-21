@@ -45,7 +45,7 @@
 as.hclust.cvxclust <- function(x, ...)
 {
     # Input checks
-    .check_cvxclust(x, "obj")
+    .check_cvxclust(x, "x")
 
     if (!(1 %in% x$num_clusters)) {
         message = paste("The clusterpath does not terminate in a single",

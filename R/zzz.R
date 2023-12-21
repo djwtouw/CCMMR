@@ -10,7 +10,8 @@
                              "(2022). Convex Clustering through MM: An",
                              "Efficient Algorithm to Perform Hierarchical",
                              "Clustering. arXiv preprint arXiv:2211.01877.\n")
-    message("Thank you for using CCMMR!")
-    message("To acknowledge our work, please cite the paper:")
-    message(package_citation)
+    msg = paste("Thank you for using CCMMR!",
+                "To acknowledge our work, please cite the paper:",
+                package_citation, sep = "\n")
+    packageStartupMessage(msg)
 }

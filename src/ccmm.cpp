@@ -3,6 +3,7 @@
 #include <Eigen/Eigen>
 #include <iostream>
 #include <algorithm>
+#include <list>
 
 //[[Rcpp::depends(RcppEigen)]]
 
@@ -11,8 +12,7 @@
 // the input to be already column major
 Eigen::SparseMatrix<double>
 sparse_from_dok(const Eigen::Matrix<int, 2, Eigen::Dynamic>& M_idx,
-                const Eigen::VectorXd& M_val, const int n_rows,
-                const int n_cols)
+                const Eigen::VectorXd& M_val, int n_rows, int n_cols)
 {
     Eigen::SparseMatrix<double> result(n_rows, n_cols);
 
@@ -35,7 +35,9 @@ sparse_from_dok(const Eigen::Matrix<int, 2, Eigen::Dynamic>& M_idx,
 
     // Insert the elements
     for (int i = 0; i < nnz; i++) {
-        result.insert(M_idx(0, i), M_idx(1, i)) = M_val(i);
+        if (M_idx(0, i) > M_idx(1, i)) {
+            result.insert(M_idx(0, i), M_idx(1, i)) = M_val(i);
+        }
     }
 
     // Compress
@@ -53,13 +55,14 @@ struct CCMMConstants {
     double kappa_pen = 1.0;
     int burn_in;
     int max_iter;
+    bool use_target;
 
     CCMMConstants(const Eigen::MatrixXd& X,
                   const Eigen::SparseMatrix<double>& W,
-                  const double eps_conv, const double eps_fusions,
-                  const int burn_in, const int max_iter, const bool scale) :
+                  double eps_conv, double eps_fusions, int burn_in,
+                  int max_iter, bool scale, bool use_target) :
                   X(X), eps_conv(eps_conv), eps_fusions(eps_fusions),
-                  burn_in(burn_in), max_iter(max_iter)
+                  burn_in(burn_in), max_iter(max_iter), use_target(use_target)
     {
         // Scaling constants for the loss function
         if (scale) {
@@ -78,6 +81,7 @@ struct CCMMVariables {
     Eigen::MatrixXd XU;
     Eigen::SparseMatrix<double> U;
     Eigen::SparseMatrix<double> UWU;
+    Eigen::SparseMatrix<double> D;
     Eigen::ArrayXd cluster_sizes;
 
     // Variables to construct the merge table
@@ -89,6 +93,30 @@ struct CCMMVariables {
     // Additional information
     double loss = 0;
     int n_iterations = 0;
+
+
+    void update_distances()
+    {
+        // Compute the pairwise distances
+        for (int j = 0; j < D.outerSize(); j++) {
+            for (Eigen::SparseMatrix<double>::InnerIterator it(D, j); it; ++it) {
+                int i = int(it.row());
+                if (i == j) continue;
+
+                it.valueRef() = (M.col(i) - M.col(j)).norm();
+            }
+        }
+    }
+
+
+    void set_distances()
+    {
+        // Copy UWU to get the same sparsity structure
+        D = UWU;
+
+        // Compute the pairwise distances
+        update_distances();
+    }
 
 
     CCMMVariables(const Eigen::MatrixXd& X,
@@ -113,6 +141,10 @@ struct CCMMVariables {
 
         // Initialize merge height vector
         merge_height = Eigen::ArrayXd(n - 1);
+
+        // Compute the relevant distances based on the nonzero elements of the
+        // weight matrix
+        set_distances();
     }
 
 
@@ -130,12 +162,18 @@ struct CCMMVariables {
 
         // Compute the penalty term
         for (int j = 0; j < UWU.outerSize(); j++) {
+            // Iterator for D
+            Eigen::SparseMatrix<double>::InnerIterator D_it(D, j);
+
             for (Eigen::SparseMatrix<double>::InnerIterator it(UWU, j); it; ++it) {
                 int i = int(it.row());
 
-                if (i < j) {
-                    penalty += it.value() * (M.col(i) - M.col(j)).norm();
+                if (i > j) {
+                    penalty += it.value() * D_it.value();
                 }
+
+                // Continue iterator for D
+                ++D_it;
             }
         }
 
@@ -143,8 +181,8 @@ struct CCMMVariables {
     }
 
 
-    void update(const double kappa_eps, const double kappa_pen,
-                const double lambda, const int burn_in, const int iter)
+    void update(double kappa_eps, double kappa_pen, double lambda, int burn_in,
+                int iter)
     {
         // Due to Eigen following colmajor conventions, this function computes
         // the transpose of the update that is shown in the paper.
@@ -165,6 +203,9 @@ struct CCMMVariables {
         // gamma * abs(C) * M0 as D0 is twice the diagonal of C and all
         // off-diagonal elements of C are negative
         for (int j = 0; j < UWU.outerSize(); j++) {
+            // Iterator for D
+            Eigen::SparseMatrix<double>::InnerIterator D_it(D, j);
+
             for (Eigen::SparseMatrix<double>::InnerIterator it(UWU, j); it; ++it) {
                 int i = int(it.row());
 
@@ -172,7 +213,7 @@ struct CCMMVariables {
                     double w_ij = it.value();
 
                     // Compute gamma * UWU_ij / ||m_i - m_j||
-                    double temp1 = (M.col(i) - M.col(j)).norm();
+                    double temp1 = D_it.value();
                     temp1 = gamma * w_ij / std::max(temp1, 1e-6);
 
                     for (int row = 0; row < p; row++) {
@@ -185,6 +226,9 @@ struct CCMMVariables {
                     diagonal(i) += temp1;
                     diagonal(j) += temp1;
                 }
+
+                // Continue iterator for D
+                ++D_it;
             }
         }
 
@@ -205,17 +249,18 @@ struct CCMMVariables {
 
         // Set new M
         M = M_update;
+
+        // Update pairwise distances
+        update_distances();
     }
 
 
-    Eigen::SparseMatrix<double> fusion_candidates(const double eps_fusions)
+    Eigen::SparseMatrix<double> fusion_candidates(double eps_fusions)
     {
         // Preliminaries
         int n = int(M.cols());
         int cluster = 1;
-        double eps_fus_sq = eps_fusions * eps_fusions;
         Eigen::ArrayXi cluster_membership = Eigen::ArrayXi::Zero(n);
-        // Eigen::ArrayXd distances = 2 * eps_fus_sq * Eigen::ArrayXd::Ones(n);
 
         // Find fusion candidates
         for (int j = 0; j < UWU.outerSize(); j++) {
@@ -223,30 +268,20 @@ struct CCMMVariables {
                 cluster_membership(j) = cluster;
                 cluster++;
 
+                // Iterator for D
+                Eigen::SparseMatrix<double>::InnerIterator D_it(D, j);
+
                 for (Eigen::SparseMatrix<double>::InnerIterator it(UWU, j); it; ++it) {
                     int i = int(it.row());
 
-                    /* Alternative way of finding fusion candidates, allows
-                     * "stealing" of a row of M if a later evaluated distance
-                     * is found to be smaller. Positive effect appears to be
-                     * negligible, requires further testing
-                     if (j != i) {
-                     double d_ij = (M.col(i) - M.col(j)).squaredNorm();
-
-                     if ((d_ij <= eps_fus_sq) && (d_ij < distances(i))) {
-                     cluster_membership(i) = cluster_membership(j);
-                     distances(i) = d_ij;
-                     }
-                     }*/
-
-                    // Same approach as CCMMR
                     if (i > j) {
-                        double d_ij = (M.col(i) - M.col(j)).squaredNorm();
-
-                        if (d_ij <= eps_fus_sq) {
+                        if (D_it.value() <= eps_fusions) {
                             cluster_membership(i) = cluster_membership(j);
                         }
                     }
+
+                    // Continue iterator for D
+                    ++D_it;
                 }
             }
         }
@@ -267,13 +302,18 @@ struct CCMMVariables {
     }
 
 
-    bool fuse(const double eps_fusions, const double lambda)
+    bool fuse(double eps_fusions, double lambda)
     {
         auto U_new = fusion_candidates(eps_fusions);
 
         if (U_new.rows() > U_new.cols()) {
-            // Simple updates of variables
+            // Computation of updated lower triangular part of UWU
             UWU = U_new.transpose() * UWU * U_new;
+            Eigen::SparseMatrix<double> lt = UWU.triangularView<Eigen::Lower>();
+            Eigen::SparseMatrix<double> utt = UWU.triangularView<Eigen::Upper>().transpose();
+            UWU = lt + utt;
+
+            // Update of XU
             XU = XU * U_new;
 
             // New cluster sizes and new M
@@ -360,21 +400,56 @@ struct CCMMVariables {
             // Set M and cluster_sizes to their updates
             M = M_new;
             cluster_sizes = cluster_sizes_new;
+
+            // Set distances based on the new clusters
+            set_distances();
         }
 
         return U_new.rows() > U_new.cols();
     }
 
 
-    void minimize(const CCMMConstants& constants, const double lambda)
+    bool has_converged(double l_old, double l_new, double l_target,
+                       double eps_conv, bool use_target)
+    {
+        if (!use_target) {
+            return (l_old - l_new) / l_new <= eps_conv;
+        }
+
+        return (l_new - l_target) / l_target <= eps_conv;
+    }
+
+
+    std::tuple<Eigen::VectorXd, Eigen::VectorXd>
+    minimize(const CCMMConstants& constants, double lambda, double loss_target,
+             bool save_convergence_norms)
     {
         // Preliminaries
         int iter = 0;
         double loss_1 = loss_fusions(constants, lambda);
         double loss_0 = (2 + constants.eps_conv) * loss_1;
 
-        while ((fabs(loss_0 - loss_1) / loss_1 > constants.eps_conv) &&
-               (iter < constants.max_iter) && lambda > 0) {
+        // Track loss value during iterations
+        Eigen::VectorXd losses(constants.max_iter + 1);
+        losses(0) = loss_1;
+
+        // Track difference between iterates
+        Eigen::VectorXd delta_iterates;
+        Eigen::MatrixXd A0;
+        Eigen::MatrixXd A1;
+
+        // Only compute A0 and allocate resources if the differences are tracked
+        if (save_convergence_norms) {
+            // Ensure that delta_iterates is properly sized
+            delta_iterates.resize(constants.max_iter);
+
+            // Compute A0
+            A0 = M * U.transpose();
+        }
+
+        while (!has_converged(loss_0, loss_1, loss_target,
+                              constants.eps_conv, constants.use_target) &&
+                                  (iter < constants.max_iter) && lambda > 0) {
             // Compute update for M
             update(constants.kappa_eps, constants.kappa_pen, lambda,
                    constants.burn_in, iter);
@@ -402,11 +477,37 @@ struct CCMMVariables {
             Rcpp::checkUserInterrupt();
 
             iter++;
+
+            // Add loss to the vector keeping track of the loss values
+            losses(iter) = loss_1;
+
+            // If tracking, compute the norm of the difference between the
+            // iterates of A
+            if (save_convergence_norms) {
+                // Compute updated version of A
+                A1 = M * U.transpose();
+
+                // Compute the difference between A0 and A1
+                delta_iterates(iter - 1) = (A0 - A1).norm();
+
+                // Update A0
+                A0 = A1;
+            }
         }
 
         // Minimization result
         n_iterations = iter;
         loss = loss_1;
+
+        // Resize the losses vector
+        losses.conservativeResize(iter + 1);
+
+        // Resize the iterate differences vector
+        if (save_convergence_norms) {
+            delta_iterates.conservativeResize(iter);
+        }
+
+        return std::make_tuple(losses, delta_iterates);
     }
 
 
@@ -432,8 +533,8 @@ struct CCMMResults {
     Eigen::ArrayXd height;
     int merge_index;
 
-    CCMMResults(const int n_obs, const int n_vars, const int n_lambdas,
-                const bool save_clusterpath) : save_clusterpath(save_clusterpath)
+    CCMMResults(int n_obs, int n_vars, int n_lambdas, bool save_clusterpath) :
+                save_clusterpath(save_clusterpath)
     {
         merge = Eigen::ArrayXXi(2, n_obs - 1);
         height = Eigen::ArrayXd(n_obs - 1);
@@ -447,7 +548,7 @@ struct CCMMResults {
         }
     }
 
-    void add_results(const CCMMVariables& variables, const double lambda)
+    void add_results(const CCMMVariables& variables, double lambda)
     {
         if (save_clusterpath) {
             int start_idx = info_index * int(variables.U.rows());
@@ -486,18 +587,36 @@ struct CCMMResults {
 };
 
 
+Rcpp::List stdListToRcppList(const std::list<Eigen::VectorXd>& l)
+{
+    Rcpp::List result(l.size());
+
+    // Fill the list
+    int i = 0;
+    for (const Eigen::VectorXd& vec : l) {
+        result[i++] = Eigen::VectorXd(vec);
+    }
+
+    return result;
+}
+
+
 //[[Rcpp::export(.convex_clusterpath)]]
 Rcpp::List
 convex_clusterpath(const Eigen::MatrixXd& X,
                    const Eigen::MatrixXi& W_idx,
                    const Eigen::VectorXd& W_val,
                    const Eigen::VectorXd& lambdas,
-                   const double eps_conv,
-                   const double eps_fusions,
-                   const bool scale,
-                   const bool save_clusterpath,
-                   const int burnin_iter,
-                   const int max_iter_conv)
+                   const Eigen::VectorXd& target_losses,
+                   double eps_conv,
+                   double eps_fusions,
+                   bool scale,
+                   bool save_clusterpath,
+                   bool use_target,
+                   bool save_losses,
+                   bool save_convergence_norms,
+                   int burnin_iter,
+                   int max_iter_conv)
 {
     // Number of observations to clusters
     int n_obs = int(X.cols());
@@ -513,13 +632,32 @@ convex_clusterpath(const Eigen::MatrixXd& X,
     // Initialize CCMM structs
     CCMMVariables variables(X, W);
     CCMMConstants constants(X, W, eps_conv, eps_fusions, burnin_iter,
-                            max_iter_conv, scale);
+                            max_iter_conv, scale, use_target);
     CCMMResults results(n_obs, n_vars, n_lambdas, save_clusterpath);
+
+    // Linked list for storing the losses for each minimization
+    std::list<Eigen::VectorXd> losses;
+
+    // Linked list for storing the differences between the iterates for each
+    // minimization
+    std::list<Eigen::VectorXd> convergence_norms;
 
     // Minimize the convex clustering loss function for each lambda
     for (int i = 0; i < n_lambdas; i++) {
-        variables.minimize(constants, lambdas(i));
+        auto [losses_i, convergence_norms_i] = variables.minimize(
+            constants, lambdas(i), target_losses(i), save_convergence_norms
+        );
         results.add_results(variables, lambdas(i));
+
+        // Add losses for this minimization to the list
+        if (save_losses) {
+            losses.push_back(losses_i);
+        }
+
+        // Add the differences between the iterates to the list
+        if (save_convergence_norms) {
+            convergence_norms.push_back(convergence_norms_i);
+        }
     }
 
     // Do some cleaning up on the variables
@@ -534,6 +672,14 @@ convex_clusterpath(const Eigen::MatrixXd& X,
         Rcpp::Named("info_d") = results.info_d
     );
 
+    if (save_losses) {
+        res["losses"] = stdListToRcppList(losses);
+    }
+
+    if (save_convergence_norms) {
+        res["convergence_norms"] = stdListToRcppList(convergence_norms);
+    }
+
     return res;
 }
 
@@ -543,19 +689,19 @@ Rcpp::List
 convex_clustering(const Eigen::MatrixXd& X,
                   const Eigen::MatrixXi& W_idx,
                   const Eigen::VectorXd& W_val,
-                  const double eps_conv,
-                  const double eps_fusions,
-                  const bool scale,
-                  const bool save_clusterpath,
-                  const int burnin_iter,
-                  const int max_iter_conv,
-                  const int target_low,
-                  const int target_high,
-                  const int max_iter_phase_1,
-                  const int max_iter_phase_2,
-                  const int verbose,
-                  const double lambda_init,
-                  const double factor)
+                  double eps_conv,
+                  double eps_fusions,
+                  bool scale,
+                  bool save_clusterpath,
+                  int burnin_iter,
+                  int max_iter_conv,
+                  int target_low,
+                  int target_high,
+                  int max_iter_phase_1,
+                  int max_iter_phase_2,
+                  int verbose,
+                  double lambda_init,
+                  double factor)
 {
     // Number of observations to clusters
     int n_obs = int(X.cols());
@@ -570,7 +716,7 @@ convex_clustering(const Eigen::MatrixXd& X,
     // Initialize CCMM structs
     CCMMVariables variables(X, W);
     CCMMConstants constants(X, W, eps_conv, eps_fusions, burnin_iter,
-                            max_iter_conv, scale);
+                            max_iter_conv, scale, false);
     CCMMResults results(n_obs, n_vars, target_high - target_low + 1, save_clusterpath);
 
     // Counters to keep track of the number of minimizations
@@ -587,7 +733,7 @@ convex_clustering(const Eigen::MatrixXd& X,
     int current_target = std::min(n_obs - 1, target_high);
 
     // Minimize loss for lambda = 0
-    variables.minimize(constants, 0);
+    static_cast<void>(variables.minimize(constants, 0, -1.0, false));
 
     // Create variables struct to store the result if the target has been
     // found
@@ -638,7 +784,7 @@ convex_clustering(const Eigen::MatrixXd& X,
 
         while (iter < max_iter_phase_1 && lambda < 1e30) {
             // Minimize the loss
-            variables.minimize(constants, lambda);
+            static_cast<void>(variables.minimize(constants, lambda, -1.0, false));
             phase_1_instances_solved++;
 
             if (verbose > 0) {
@@ -693,7 +839,7 @@ convex_clustering(const Eigen::MatrixXd& X,
                 lambda = 0.5 * (lambda_lb + lambda_ub);
 
                 // Minimize the loss
-                variables.minimize(constants, lambda);
+                static_cast<void>(variables.minimize(constants, lambda, -1.0, false));
                 phase_2_instances_solved++;
 
                 if (verbose > 0) {
