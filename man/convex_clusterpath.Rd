@@ -69,7 +69,9 @@ attained during minimization for each value of lambda. Default is
 
 \item{save_convergence_norms}{If \code{TRUE}, return the norm of the
 difference between consecutive iterates during minimization for each value
-of lambda. Default is \code{FALSE}.}
+of lambda. Default is \code{FALSE}. If timing the algorithm is of importance,
+do not set this to \code{TRUE}, as additional computations are done for
+bookkeeping that are irrelevant to the optimization.}
 }
 \value{
 A \code{cvxclust} object containing the following
