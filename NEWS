@@ -1,0 +1,11 @@
+Changes in CCMMR version 0.2
+
+    + Added new option to guarantee a connected weight matrix in
+      sparse_weights().
+
+    + Replaced some inefficient parts of the C++ code.
+
+    + Added several options to monitor the algorithm's performance during
+      minimization. Monitoring can be turned on using the relevant arguments of
+      convex_clusterpath(). Data gathered while monitoring is part of the
+      output of convex_clusterpath().
