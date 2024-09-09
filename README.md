@@ -178,6 +178,7 @@ res = convex_clusterpath(X, W, lambdas)
 plot(res, col = clusters(res, 5))
 ```
 The left image shows the objects in the data and the nonzero weights between them as nodes and edges, respectively. There are five groups of objects that are isolated from each other. Without nonzero weights connecting these groups, they will not be clustered by the convex clustering model as shown in the right image, where the clusterpath is drawn.
+
 <img src="./inst/doc/repo_plots/clusterpath_5.svg" width="67%" style="display: block; margin: auto;" />
 
 The second option, which is also the default, is to ensure a connected weight matrix via a symmetric circulant matrix. This method connects each object $i$ with $i+1$, guaranteeing that there is a path between all objects.
@@ -209,6 +210,7 @@ res = convex_clusterpath(X, W, lambdas)
 plot(res, col = clusters(res, 5))
 ```
 Again, the left plot contains a representation of the nonzero weights. Even though it looks messy, the result of this approach is comparable to the disconnected weight matrix. If the clusterpath result is queried for a solution with five clusters, the same five are returned as by the clusterpath that used the disconnected weight matrix (albeit colored differently due to a different ordering of the labels). The main difference is that in this case, it is possible to also to ask for fewer than five clusters.
+
 <img src="./inst/doc/repo_plots/clusterpath_6.svg" width="67%" style="display: block; margin: auto;" />
 
 Finally, a more advanced method of adding nonzero weights involves a minimum spanning tree. At the cost of a higher computational burden, the minimum number of nonzero weights that ensures a connected weight matrix can be added.
@@ -240,4 +242,5 @@ res = convex_clusterpath(X, W, lambdas)
 plot(res, col = clusters(res, 5))
 ```
 Similar to the clusterpath that used the symmetric circulant matrix, the minimum spanning tree approach is also able to deliver the same five clusters as in the disconnected case while being able to reduce the number of clusters below that.
+
 <img src="./inst/doc/repo_plots/clusterpath_7.svg" width="67%" style="display: block; margin: auto;" />
