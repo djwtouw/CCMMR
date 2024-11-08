@@ -45,29 +45,30 @@ clusters <- function(obj, n_clusters)
     }
 
     # Start with an entry in a hashmap for each observation
-    d = hashmap()
+    D = list()
     for (i in 1:obj$n) {
-        d[[-i]] = i
+        D[as.character(-i)] = i
     }
 
     # Work through the merge table to reduce the number of clusters until
     # the desired number is reached
     for (i in 1:nrow(obj$merge)) {
-        if (length(d) == n_clusters) {
+        if (length(D) == n_clusters) {
             break
         }
 
-        d[[i]] = c(d[[obj$merge[i, 1]]], d[[obj$merge[i, 2]]])
-        delete(d, obj$merge[i, 1])
-        delete(d, obj$merge[i, 2])
+        D[[as.character(i)]] = c(D[[as.character(obj$merge[i, 1])]],
+                                 D[[as.character(obj$merge[i, 2])]])
+        D[as.character(obj$merge[i, 1])] = NULL
+        D[as.character(obj$merge[i, 2])] = NULL
     }
 
     # Create cluster labels
     result = rep(0, obj$n)
     label = 1
 
-    for (key in keys(d)) {
-        result[d[[key]]] = label
+    for (key in names(D)) {
+        result[D[[key]]] = label
 
         # Increment label
         label = label + 1

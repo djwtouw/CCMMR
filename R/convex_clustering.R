@@ -198,26 +198,27 @@ convex_clustering <- function(X, W, target_low, target_high = NULL,
 
     # Determine order of the observations for a dendrogram
     # Start with an entry in a hashmap for each observation
-    d = hashmap()
+    D = list()
     for (i in 1:n) {
-        d[[-i]] = i
+        D[as.character(-i)] = i
     }
 
     # Work through the merge table to make sure that everything that is
     # merged is next to each other
     if (nrow(result$merge) >= 1) {
         for (i in 1:nrow(result$merge)) {
-            d[[i]] = c(d[[result$merge[i, 1]]], d[[result$merge[i, 2]]])
-            delete(d, result$merge[i, 1])
-            delete(d, result$merge[i, 2])
+            D[[as.character(i)]] = c(D[[as.character(result$merge[i, 1])]],
+                                     D[[as.character(result$merge[i, 2])]])
+            D[as.character(result$merge[i, 1])] = NULL
+            D[as.character(result$merge[i, 2])] = NULL
         }
     }
 
     # Finally, create a vector with the order of the observations
     result$order = c()
-    keys = keys(d)
+    keys = names(D)
     for (key in keys) {
-        result$order = c(result$order, d[[key]])
+        result$order = c(result$order, D[[key]])
     }
 
     # Add elapsed time
